@@ -3,7 +3,7 @@ using ClassicalSharp.GraphicsAPI;
 
 namespace ClassicalSharp {
 	
-	public abstract class ChunkMeshBuilder {
+	public abstract partial class ChunkMeshBuilder {
 		
 		protected int X, Y, Z;
 		protected byte tile;
@@ -11,19 +11,13 @@ namespace ClassicalSharp {
 		protected Map map;
 		public Game Window;
 		public IGraphicsApi Graphics;
-		byte[] adjBlockLookup;
 		
 		public ChunkMeshBuilder( Game window ) {
 			Window = window;
 			Graphics = window.Graphics;
 			BlockInfo = window.BlockInfo;
 			
-			adjBlockLookup = new byte[256];
-			for( int i = 0; i < adjBlockLookup.Length; i++ ) {
-				adjBlockLookup[i] = (byte)i;
-			}
-			adjBlockLookup[9] = 8;
-			adjBlockLookup[11] = 10;
+			InitWorkerThread();
 		}
 		
 		protected int width, length, height;
@@ -89,7 +83,6 @@ namespace ClassicalSharp {
 							byte block = mapPtr[index];
 							if( block == 9 ) block = 8; // Still water --> Water
 							if( block == 11 ) block = 10; // Still lava --> Lava
-							//byte block = adjBlockLookup[map.GetBlock( index )];
 							
 							if( allAir && block != 0 ) allAir = false;
 							if( allSolid && !BlockInfo.IsOpaque( block ) ) allSolid = false;
@@ -101,8 +94,8 @@ namespace ClassicalSharp {
 			return allAir || allSolid;
 		}
 		
-		public ChunkDrawInfo GetDrawInfo( int x, int y, int z ) {
-			return BuildChunk( x, y, z ) ? null : GetChunkInfo( x, y, z );
+		protected RawChunkDrawInfo GetDrawInfo( int x, int y, int z ) {
+			return BuildChunk( x, y, z ) ? new RawChunkDrawInfo() : GetChunkInfo( x, y, z );
 		}
 		
 		protected virtual void PreStretchTiles( int x1, int y1, int z1 ) {
@@ -114,7 +107,7 @@ namespace ClassicalSharp {
 		protected virtual void PreRenderTile() {
 		}
 
-		public void RenderTile( int chunkIndex, int xx, int yy, int zz, int x, int y, int z ) {
+		protected void RenderTile( int chunkIndex, int xx, int yy, int zz, int x, int y, int z ) {
 			tile = chunk[chunkIndex];
 			if( tile == 0 ) return;
 			X = x;
@@ -351,20 +344,7 @@ namespace ClassicalSharp {
 		
 		public abstract void EndRender();
 		
-		public virtual void OnNewMap() {
-		}
-		
-		public virtual void OnNewMapLoaded() {
-			map = Window.Map;
-			width = map.Width;
-			height = map.Height;
-			length = map.Length;
-			maxX = width - 1;
-			maxY = height - 1;
-			maxZ = length - 1;
-		}
-		
-		protected abstract ChunkDrawInfo GetChunkInfo( int x, int y, int z );
+		protected abstract RawChunkDrawInfo GetChunkInfo( int x, int y, int z );
 
 		protected abstract void DrawTopFace( int count );
 
@@ -379,6 +359,25 @@ namespace ClassicalSharp {
 		protected abstract void DrawRightFace( int count );
 		
 		protected abstract void DrawSprite( int count );
+	}
+	
+	public class RawChunkDrawInfo {
+		
+		public bool Empty = false;
+		
+		public VertexPos3fTex2fCol4b[][] SolidParts;
+		public VertexPos3fTex2fCol4b[][] TranslucentParts;
+		public VertexPos3fTex2fCol4b[][] SpriteParts;
+		
+		public RawChunkDrawInfo( int partsCount ) {
+			SolidParts = new VertexPos3fTex2fCol4b[partsCount][];
+			TranslucentParts = new VertexPos3fTex2fCol4b[partsCount][];
+			SpriteParts = new VertexPos3fTex2fCol4b[partsCount][];
+		}
+		
+		public RawChunkDrawInfo() {
+			Empty = true;
+		}
 	}
 	
 	public class ChunkDrawInfo {

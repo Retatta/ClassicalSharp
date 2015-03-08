@@ -3,7 +3,7 @@ using ClassicalSharp.GraphicsAPI;
 using OpenTK;
 
 namespace ClassicalSharp {
-		
+	
 	// TODO: optimise chunk rendering
 	//  --> reduce the two passes: liquid pass only needs 1 small texture
 	//  --> use indices.
@@ -118,7 +118,7 @@ namespace ClassicalSharp {
 			unsortedChunks = new ChunkInfo[chunksX * chunksY * chunksZ];
 			distances = new int[chunks.Length];
 			CreateChunkCache();
-			builder.OnNewMapLoaded();
+			builder.OnNewMapLoaded( chunksX, chunksY, chunksZ );
 		}
 		
 		void ClearChunkCache() {
@@ -131,6 +131,7 @@ namespace ClassicalSharp {
 		
 		void DeleteChunk( ChunkInfo info ) {
 			ChunkDrawInfo drawInfo = info.DrawInfo;
+			info.Empty = false;
 			if( drawInfo == null ) return;
 			
 			for( int i = 0; i < drawInfo.SolidParts.Length; i++ ) {
@@ -138,8 +139,7 @@ namespace ClassicalSharp {
 				Graphics.DeleteVb( drawInfo.TranslucentParts[i].VboID );
 				Graphics.DeleteVb( drawInfo.SolidParts[i].VboID );
 			}
-			info.DrawInfo = null;
-			info.Empty = false;
+			info.DrawInfo = null;		
 		}
 		
 		void CreateChunkCache() {
@@ -199,9 +199,10 @@ namespace ClassicalSharp {
 		}
 		
 		void ResetChunk( int cx, int cy, int cz ) {
-			if( cx < 0 || cy < 0 || cz < 0 || 
+			if( cx < 0 || cy < 0 || cz < 0 ||
 			   cx >= chunksX || cy >= chunksY || cz >= chunksZ ) return;
 			DeleteChunk( unsortedChunks[cx + chunksX * ( cy + cz * chunksY )] );
+			builder.MarkChunkForUpdate( cx, cy, cz );
 		}
 		
 		public void Render( double deltaTime ) {
@@ -215,11 +216,11 @@ namespace ClassicalSharp {
 			builder.BeginRender();
 			Graphics.Texturing = true;
 			Graphics.AlphaTest = true;
-			Graphics.FaceCulling = true;
+			//Graphics.FaceCulling = true;
 			for( int batch = 0; batch < _1Dcount; batch++ ) {
 				Graphics.Bind2DTexture( Window.TerrainAtlas1DTexIds[batch] );
 				RenderSolidBatch( batch );
-			}		
+			}
 			Graphics.FaceCulling = false;
 			for( int batch = 0; batch < _1Dcount; batch++ ) {
 				Graphics.Bind2DTexture( Window.TerrainAtlas1DTexIds[batch] );
@@ -279,7 +280,6 @@ namespace ClassicalSharp {
 		}
 		
 		void UpdateChunks() {
-			int chunksUpdatedThisFrame = 0;
 			int adjViewDistSqr = ( Window.ViewDistance + 14 ) * ( Window.ViewDistance + 14 );
 			for( int i = 0; i < chunks.Length; i++ ) {
 				ChunkInfo info = chunks[i];
@@ -288,18 +288,41 @@ namespace ClassicalSharp {
 				int distSqr = distances[i];
 				bool inRange = distSqr <= adjViewDistSqr;
 				
-				if( info.DrawInfo == null ) {
-					if( inRange && chunksUpdatedThisFrame < 4 ) {
-						Window.ChunkUpdates++;
-						info.DrawInfo = builder.GetDrawInfo( loc.X, loc.Y, loc.Z );
-						if( info.DrawInfo == null ) {
-							info.Empty = true;
-						}
-						chunksUpdatedThisFrame++;
-					}
+				if( info.DrawInfo == null && inRange ) {		
+					ProcessChunk( info, loc.X >> 4, loc.Y >> 4, loc.Z >> 4 );
 				}
 				info.Visible = inRange && Window.Culling.SphereInFrustum( loc.X + 8, loc.Y + 8, loc.Z + 8, 14 ); // 14 ~ sqrt(3 * 8^2)
 			}
+		}
+		
+		void ProcessChunk( ChunkInfo info, int cx, int cy, int cz ) {
+			RawChunkDrawInfo rawInfo = builder.GetBuiltChunk( cx, cy, cz );
+			if( rawInfo == null ) return;
+			
+			Window.ChunkUpdates++;
+			if( rawInfo.Empty ) {
+				info.Empty = true;
+			} else {
+				info.DrawInfo = Load( rawInfo );
+			}
+		}
+		
+		ChunkDrawInfo Load( RawChunkDrawInfo rawInfo ) {
+			ChunkDrawInfo info = new ChunkDrawInfo( rawInfo.SolidParts.Length );
+			for( int i = 0; i < rawInfo.SolidParts.Length; i++ ) {
+				info.SolidParts[i] = MakePart( rawInfo.SolidParts[i] );
+				info.SpriteParts[i] = MakePart( rawInfo.SpriteParts[i] );
+				info.TranslucentParts[i] = MakePart( rawInfo.TranslucentParts[i] );			
+			}
+			return info;
+		}
+		
+		ChunkPartInfo MakePart( VertexPos3fTex2fCol4b[] vertices ) {
+			if( vertices == null || vertices.Length == 0 ) {
+				return new ChunkPartInfo( 0, 0 );
+			}
+			int vboId = Graphics.InitVb( vertices, DrawMode.Triangles, VertexFormat.VertexPos3fTex2fCol4b );
+			return new ChunkPartInfo( vboId, vertices.Length );
 		}
 		
 		// TODO: there's probably a better way of doing this.

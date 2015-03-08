@@ -39,9 +39,7 @@ namespace ClassicalSharp {
 			}
 			
 			public void ExpandToCapacity() {
-				if( count > vertices.Length ) {
-					vertices = new VertexPos3fTex2fCol4b[count];
-				}
+				vertices = new VertexPos3fTex2fCol4b[count];
 			}
 			
 			public void ResetState() {
@@ -111,21 +109,13 @@ namespace ClassicalSharp {
 				( BlockInfo.BlockHeight( map.GetBlock( x, y, z ) ) == 1 ? y : y - 1 );
 		}
 		
-		protected override ChunkDrawInfo GetChunkInfo( int x, int y, int z ) {
-			ChunkDrawInfo info = new ChunkDrawInfo( arraysCount );
+		protected override RawChunkDrawInfo GetChunkInfo( int x, int y, int z ) {
+			RawChunkDrawInfo info = new RawChunkDrawInfo( arraysCount );
 			for( int i = 0; i < arraysCount; i++ ) {
 				DrawInfo1D drawInfo = drawInfoBuffer[i];
-				info.SolidParts[i] = GetPartInfo( drawInfo.Solid );
-				info.TranslucentParts[i] = GetPartInfo( drawInfo.Translucent );
-				info.SpriteParts[i] = GetPartInfo( drawInfo.Sprite );
-			}
-			return info;
-		}
-		
-		ChunkPartInfo GetPartInfo( DrawInfo1DPart part ) {
-			ChunkPartInfo info = new ChunkPartInfo( 0, part.count );
-			if( part.count > 0 ) {
-				info.VboID = Graphics.InitVb( part.vertices, DrawMode.Triangles, VertexFormat.VertexPos3fTex2fCol4b, part.count );
+				info.SolidParts[i] = drawInfo.Solid.vertices;
+				info.TranslucentParts[i] = drawInfo.Translucent.vertices;
+				info.SpriteParts[i] = drawInfo.Sprite.vertices;
 			}
 			return info;
 		}
